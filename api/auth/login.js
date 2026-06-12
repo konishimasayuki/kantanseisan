@@ -70,22 +70,24 @@ export default async function handler(req, res) {
   const { userId, password } = req.body || {};
   if (!userId || !password) return res.status(400).json({ error: "IDとパスワードを入力してください" });
 
-  // ── 初回起動時にユーザーをseed ──
+  // ── ユーザーが存在しなければ個別にseed ──
   const existsMain = await redis.exists("ks:user:ninjin.konishi@gmail.com");
   if (!existsMain) {
-    // 本番ユーザー
     await redis.set("ks:user:ninjin.konishi@gmail.com", JSON.stringify({
       userId: "ninjin.konishi@gmail.com",
       displayName: "Konishi",
       passwordHash: hashPassword("masa0524"),
     }));
-    // デモユーザー
+  }
+
+  const existsDemo = await redis.exists("ks:user:a");
+  if (!existsDemo) {
     await redis.set("ks:user:a", JSON.stringify({
       userId: "a",
       displayName: "デモユーザー",
       passwordHash: hashPassword("a"),
     }));
-    // デモデータ投入
+    // デモデータ投入（初回のみ）
     const demoItems = generateDemoData("a");
     for (const item of demoItems) {
       await redis.lpush("ks:expenses:a", JSON.stringify(item));
