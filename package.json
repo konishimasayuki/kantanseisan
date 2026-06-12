@@ -1,0 +1,22 @@
+{
+  "name": "kantanseisan",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "biome check src"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "@upstash/redis": "^1.34.3"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.9.4",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.19",
+    "@vercel/node": "^3.2.7"
+  }
+}
