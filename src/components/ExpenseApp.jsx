@@ -586,7 +586,7 @@ const S = {
   drawerUser: { display:"flex", alignItems:"center", gap:12, padding:"20px 16px 16px", borderBottom:"1px solid #F1F5F9" },
   drawerUserIcon: { fontSize:28, background:"#FFF7ED", borderRadius:"50%", width:40, height:40, display:"flex", alignItems:"center", justifyContent:"center" },
   drawerDivider: { height:1, background:"#F1F5F9", margin:"8px 0" },
-  drawerItem: { display:"block", width:"100%", background:"none", border:"none", textAlign:"left", padding:"13px 20px", fontSize:15, cursor:"pointer", color:"#1E293B", display:"flex", alignItems:"center", gap:10 },
+  drawerItem: { display:"flex", width:"100%", background:"none", border:"none", textAlign:"left", padding:"13px 20px", fontSize:15, cursor:"pointer", color:"#1E293B", alignItems:"center", gap:10 },
   drawerStat: { display:"flex", justifyContent:"space-between", padding:"6px 20px", fontSize:13, color:"#475569" },
   drawerMonthLabel: { fontSize:11, fontWeight:700, color:"#94A3B8", padding:"8px 20px 4px", letterSpacing:"0.06em" },
   logoutBtn: { display:"block", width:"calc(100% - 32px)", margin:"8px 16px 0", background:"none", border:"1px solid #E2E8F0", borderRadius:8, color:"#94A3B8", padding:"10px", fontSize:13, cursor:"pointer" },
