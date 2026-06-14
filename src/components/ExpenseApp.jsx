@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { generatePDF } from "../generatePDF.js";
 
 /* ═══ 定数 ═══ */
 const FUEL_EFF_DEFAULT   = 15;
@@ -28,30 +29,7 @@ const blankExpense = () => ({
   memo: "", files: [],
 });
 
-/* ═══ Print CSS ═══ */
-const PRINT_CSS = `
-@media print {
-  body > * { display: none !important; }
-  #ks-print { display: block !important; }
-}
-#ks-print {
-  display: none;
-  font-family: 'Hiragino Sans','Meiryo',sans-serif;
-  color: #1e293b; padding: 24px; max-width: 780px; margin: 0 auto;
-}
-#ks-print h1 { font-size: 18px; margin: 0 0 4px; }
-#ks-print .sub { font-size: 12px; color: #64748b; margin-bottom: 16px; }
-#ks-print table { width:100%; border-collapse:collapse; margin-bottom:20px; font-size:12px; }
-#ks-print th { background:#F97316; color:#fff; padding:6px 8px; text-align:left; font-weight:600; }
-#ks-print td { padding:5px 8px; border-bottom:1px solid #e2e8f0; }
-#ks-print tr:nth-child(even) td { background:#fff7ed; }
-#ks-print .sec { font-size:13px; font-weight:700; color:#F97316; border-left:3px solid #F97316; padding-left:8px; margin:16px 0 8px; }
-#ks-print .srow { display:flex; gap:16px; margin-bottom:20px; flex-wrap:wrap; }
-#ks-print .sitem { border:1px solid #fed7aa; border-radius:6px; padding:8px 14px; min-width:130px; }
-#ks-print .slabel { font-size:10px; color:#9a3412; margin-bottom:2px; }
-#ks-print .sval { font-size:16px; font-weight:700; color:#ea580c; }
-#ks-print .footer { font-size:10px; color:#94a3b8; margin-top:24px; border-top:1px solid #e2e8f0; padding-top:8px; }
-`;
+
 
 /* ═══ API helper ═══ */
 const api = async (path, method="GET", body, token) => {
@@ -82,14 +60,6 @@ export default function ExpenseApp({ session, onLogout }) {
   const [dragOver,    setDragOver]    = useState(false);
   const [saving,      setSaving]      = useState(false);
   const fileRef = useRef(null);
-
-  /* print CSS */
-  useEffect(() => {
-    const s = document.createElement("style");
-    s.innerHTML = PRINT_CSS;
-    document.head.appendChild(s);
-    return () => document.head.removeChild(s);
-  }, []);
 
   /* 初期データ取得 */
   useEffect(() => {
@@ -199,51 +169,14 @@ export default function ExpenseApp({ session, onLogout }) {
 
   /* ── PDF ── */
   const printPDF = () => {
-    const area = document.getElementById("ks-print");
-    if (!area) return;
-    const fuelItems  = monthExpenses.filter(e => e.category==="fuel");
-    const monthLabel = filterMonth ? filterMonth.replace("-","年")+"月" : "全期間";
-    const catTotals  = {};
-    monthExpenses.forEach(e => { catTotals[e.category] = (catTotals[e.category]||0) + e.amount; });
-    const monthSetts = settlements.filter(r => r.date?.startsWith(filterMonth));
-
-    area.innerHTML = `
-      <h1>経費精算書 ― ${monthLabel}</h1>
-      <div class="sub">出力日: ${fmtDate(todayStr())} ／ ${session.displayName || session.userId}</div>
-      <div class="srow">
-        <div class="sitem"><div class="slabel">経費合計</div><div class="sval">${fmt(monthTotal)}</div></div>
-        <div class="sitem"><div class="slabel">精算済み</div><div class="sval">${fmt(monthSettled)}</div></div>
-        <div class="sitem"><div class="slabel">未精算残</div><div class="sval">${fmt(monthTotal-monthSettled)}</div></div>
-      </div>
-      <div class="sec">カテゴリ別集計</div>
-      <table>
-        <tr><th>カテゴリ</th><th style="text-align:right">金額</th><th style="text-align:right">件数</th></tr>
-        ${CATEGORIES.map(cat=>{
-          const t=catTotals[cat.id]||0; const c=monthExpenses.filter(e=>e.category===cat.id).length;
-          return t ? `<tr><td>${cat.icon} ${cat.label}</td><td style="text-align:right">${fmt(t)}</td><td style="text-align:right">${c}件</td></tr>` : "";
-        }).join("")}
-        <tr style="font-weight:700"><td>合計</td><td style="text-align:right">${fmt(monthTotal)}</td><td style="text-align:right">${monthExpenses.length}件</td></tr>
-      </table>
-      ${fuelItems.length ? `
-      <div class="sec">⛽ ガソリン代明細</div>
-      <table>
-        <tr><th>日付</th><th>内容</th><th>区間</th><th style="text-align:right">距離</th><th style="text-align:right">金額</th></tr>
-        ${fuelItems.map(e=>`<tr><td>${fmtDate(e.date)}</td><td>${e.description}</td><td>${e.from&&e.to?`${e.from}→${e.to}`:"-"}</td><td style="text-align:right">${e.distance?e.distance+"km":"-"}</td><td style="text-align:right">${fmt(e.amount)}</td></tr>`).join("")}
-      </table>` : ""}
-      <div class="sec">📋 経費明細（全件）</div>
-      <table>
-        <tr><th>日付</th><th>カテゴリ</th><th>内容</th><th style="text-align:right">金額</th></tr>
-        ${monthExpenses.map(e=>{const cat=getCat(e.category);return `<tr><td>${fmtDate(e.date)}</td><td>${cat.icon} ${cat.label}</td><td>${e.description}${e.memo?` (${e.memo})`:""}</td><td style="text-align:right">${fmt(e.amount)}</td></tr>`;}).join("")}
-      </table>
-      ${monthSetts.length ? `
-      <div class="sec">✅ 精算記録</div>
-      <table>
-        <tr><th>精算日</th><th>金額</th><th>備考</th></tr>
-        ${monthSetts.map(r=>`<tr><td>${fmtDate(r.date)}</td><td>${fmt(r.amount)}</td><td>${r.memo||"-"}</td></tr>`).join("")}
-      </table>` : ""}
-      <div class="footer">簡単精算くん ― 自動生成</div>
-    `;
-    window.print();
+    generatePDF({
+      monthExpenses,
+      monthTotal,
+      monthSettled,
+      filterMonth,
+      settlements,
+      displayName: session.displayName || session.userId,
+    });
   };
 
   const selectedExp = expenses.find(e => e.id === selectedId);
@@ -259,7 +192,6 @@ export default function ExpenseApp({ session, onLogout }) {
 
   return (
     <div style={S.root}>
-      <div id="ks-print" />
 
       {/* Header */}
       <header style={S.header}>
@@ -621,7 +553,7 @@ function PDFView({ filterMonth, setFilterMonth, onPrint, onBack, monthExpenses, 
         <SumCard label="未精算" val={fmt(monthTotal-monthSettled)} color="#EF4444" />
       </div>
       <div style={{margin:"8px 0 16px",color:"#64748B",fontSize:13}}>{monthExpenses.length}件が対象</div>
-      <button style={S.printBtn} onClick={onPrint}>📄 PDF印刷</button>
+      <button style={S.printBtn} onClick={onPrint}>📄 PDFをダウンロード</button>
     </div>
   );
 }
