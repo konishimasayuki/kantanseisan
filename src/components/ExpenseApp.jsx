@@ -130,6 +130,23 @@ export default function ExpenseApp({ session, onLogout }) {
     finally { setSaving(false); }
   };
 
+  const updateExpense = async () => {
+    if (!form.date || !form.description || !form.amount) return;
+    setSaving(true);
+    try {
+      const updated = await api(
+        `/api/expenses/${selectedId}?userId=${session.userId}`,
+        "PUT",
+        { ...form, amount: Number(form.amount), distance: Number(form.distance) || 0 },
+        session.token
+      );
+      setExpenses(p => p.map(e => e.id === selectedId ? updated : e));
+      setForm(blankExpense());
+      navigate("detail", selectedId);
+    } catch(e) { alert(e.message); }
+    finally { setSaving(false); }
+  };
+
   const deleteExpense = async (id) => {
     try {
       await api(`/api/expenses/${id}?userId=${session.userId}`, "DELETE", null, session.token);
@@ -289,8 +306,34 @@ export default function ExpenseApp({ session, onLogout }) {
             saving={saving} unsettled={totalUnsettled}
           />
         )}
+        {view==="editExp" && selectedExp && (
+          <ExpenseForm
+            form={form} onChange={handleChange} fuelCalc={fuelCalc}
+            onSave={updateExpense} onCancel={() => navigate("detail", selectedId)}
+            saving={saving} isEdit={true}
+            dragOver={dragOver} setDragOver={setDragOver}
+            onDrop={e=>{ e.preventDefault(); setDragOver(false); handleFiles(e.dataTransfer.files); }}
+            onFiles={handleFiles} fileRef={fileRef}
+            removeFile={i => setForm(p=>({ ...p, files:p.files.filter((_,j)=>j!==i) }))}
+          />
+        )}
         {view==="detail" && selectedExp && (
-          <DetailView expense={selectedExp} onBack={() => navigate("list")} onDelete={deleteExpense} />
+          <DetailView
+            expense={selectedExp}
+            onBack={() => navigate("list")}
+            onDelete={deleteExpense}
+            onEdit={() => {
+              setForm({
+                ...selectedExp,
+                amount: String(selectedExp.amount),
+                distance: String(selectedExp.distance || ""),
+                fuelEff: selectedExp.fuelEff || String(15),
+                fuelPrice: selectedExp.fuelPrice || String(165),
+                files: selectedExp.files || [],
+              });
+              navigate("editExp", selectedExp.id);
+            }}
+          />
         )}
         {view==="pdf" && (
           <PDFView
@@ -376,12 +419,12 @@ function SecTitle({title,action}) {
 function Empty({text}) { return <div style={S.empty}>{text}</div>; }
 
 /* ═══ EXPENSE FORM ═══ */
-function ExpenseForm({ form, onChange, fuelCalc, onSave, onCancel, saving, dragOver, setDragOver, onDrop, onFiles, fileRef, removeFile }) {
+function ExpenseForm({ form, onChange, fuelCalc, onSave, onCancel, saving, isEdit, dragOver, setDragOver, onDrop, onFiles, fileRef, removeFile }) {
   const isFuel = form.category==="fuel";
   const valid  = form.date && form.description && form.amount;
   return (
     <div>
-      <PageHeader title="経費を登録" onBack={onCancel} />
+      <PageHeader title={isEdit ? "経費を編集" : "経費を登録"} onBack={onCancel} />
       <Field label="日付 *">
         <input type="date" value={form.date} onChange={e=>onChange("date",e.target.value)} style={S.input} />
       </Field>
@@ -447,7 +490,7 @@ function ExpenseForm({ form, onChange, fuelCalc, onSave, onCancel, saving, dragO
       <div style={S.formBtns}>
         <button style={S.cancelBtn} onClick={onCancel}>キャンセル</button>
         <button style={{...S.saveBtn,...(valid?{}:S.saveBtnOff)}} onClick={onSave} disabled={!valid||saving}>
-          {saving?"保存中...":"登録する"}
+          {saving ? "保存中..." : isEdit ? "更新する" : "登録する"}
         </button>
       </div>
     </div>
@@ -484,12 +527,21 @@ function SettleForm({ form, onChange, onSave, onCancel, saving, unsettled }) {
 }
 
 /* ═══ DETAIL VIEW ═══ */
-function DetailView({ expense, onBack, onDelete }) {
+function DetailView({ expense, onBack, onDelete, onEdit }) {
   const cat = getCat(expense.category);
   const [confirm, setConfirm] = useState(false);
   return (
     <div>
-      <PageHeader title="経費詳細" onBack={onBack} rightBtn={<button style={S.redBtn} onClick={()=>setConfirm(true)}>削除</button>} />
+      <PageHeader
+        title="経費詳細"
+        onBack={onBack}
+        rightBtn={
+          <div style={{display:"flex",gap:10}}>
+            <button style={S.editBtn} onClick={onEdit}>編集</button>
+            <button style={S.redBtn} onClick={()=>setConfirm(true)}>削除</button>
+          </div>
+        }
+      />
       <div style={{...S.detailTop, borderLeftColor:cat.color}}>
         <div style={{fontSize:13,color:cat.color,marginBottom:2}}>{cat.icon} {cat.label}</div>
         <div style={S.detailDesc}>{expense.description}</div>
@@ -619,6 +671,7 @@ const S = {
   pageHeader: { display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:20 },
   pageTitle: { fontSize:16, fontWeight:700 },
   backBtn: { background:"none", border:"none", color:"#F97316", fontSize:14, cursor:"pointer", padding:0 },
+  editBtn: { background:"#FFF7ED", border:"1px solid #FED7AA", borderRadius:6, color:"#F97316", fontSize:13, fontWeight:600, cursor:"pointer", padding:"4px 12px" },
   redBtn: { background:"none", border:"none", color:"#EF4444", fontSize:13, cursor:"pointer", padding:0 },
   field: { marginBottom:16 },
   fieldLabel: { display:"block", fontSize:12, fontWeight:600, color:"#64748B", marginBottom:5 },
