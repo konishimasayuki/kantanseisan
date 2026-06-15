@@ -135,7 +135,7 @@ export default function ExpenseApp({ session, onLogout }) {
     setSaving(true);
     try {
       const updated = await api(
-        `/api/expenses/${selectedId}?userId=${session.userId}`,
+        `/api/expenses/${selectedId}`,
         "PUT",
         { ...form, amount: Number(form.amount), distance: Number(form.distance) || 0 },
         session.token
@@ -149,7 +149,7 @@ export default function ExpenseApp({ session, onLogout }) {
 
   const deleteExpense = async (id) => {
     try {
-      await api(`/api/expenses/${id}?userId=${session.userId}`, "DELETE", null, session.token);
+      await api(`/api/expenses/${id}`, "DELETE", null, session.token);
       setExpenses(p => p.filter(e => e.id !== id));
       navigate("list");
     } catch(e) { alert(e.message); }
@@ -173,7 +173,7 @@ export default function ExpenseApp({ session, onLogout }) {
 
   const deleteSettle = async (id) => {
     try {
-      await api(`/api/settlements/${id}?userId=${session.userId}`, "DELETE", null, session.token);
+      await api(`/api/settlements/${id}`, "DELETE", null, session.token);
       setSettlements(p => p.filter(r => r.id !== id));
     } catch(e) { alert(e.message); }
   };
