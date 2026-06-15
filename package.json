@@ -9,16 +9,16 @@
     "lint": "biome check src"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@upstash/redis": "^1.34.3",
-    "jspdf": "^2.5.1",
-    "jspdf-autotable": "^3.8.2"
+    "pdf-lib": "^1.17.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@vercel/node": "^3.2.7",
     "@vitejs/plugin-react": "^4.3.4",
-    "vite": "^5.4.19",
-    "@vercel/node": "^3.2.7"
+    "vite": "^5.4.19"
   }
 }
