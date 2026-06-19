@@ -1,6 +1,12 @@
 import { redis } from "../_redis.js";
 import { verifyToken } from "../_auth.js";
 
+export const config = {
+  api: {
+    bodyParser: { sizeLimit: "4mb" },
+  },
+};
+
 export default async function handler(req, res) {
   const userId = await verifyToken(req);
   if (!userId) return res.status(401).json({ error: "Unauthorized" });
