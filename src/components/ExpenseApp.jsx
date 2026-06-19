@@ -29,7 +29,66 @@ const blankExpense = () => ({
   memo: "", files: [],
 });
 
+/* ═══ ファイル処理（画像は圧縮リサイズ、PDFはサイズ制限） ═══ */
+const MAX_IMAGE_DIM = 1280;      // 長辺最大px
+const JPEG_QUALITY  = 0.7;       // JPEG品質
+const MAX_PDF_BYTES = 2 * 1024 * 1024; // PDF上限2MB
 
+function processFile(file) {
+  return new Promise((resolve) => {
+    // 画像 → canvasでリサイズ＆JPEG圧縮
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let { width, height } = img;
+          if (width > height && width > MAX_IMAGE_DIM) {
+            height = Math.round((height * MAX_IMAGE_DIM) / width);
+            width = MAX_IMAGE_DIM;
+          } else if (height > MAX_IMAGE_DIM) {
+            width = Math.round((width * MAX_IMAGE_DIM) / height);
+            height = MAX_IMAGE_DIM;
+          }
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const data = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+          resolve({ name: file.name.replace(/\.[^.]+$/, ".jpg"), type: "image/jpeg", data });
+        };
+        img.onerror = () => resolve(null);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+      return;
+    }
+    // PDF → サイズチェックのみ
+    if (file.type === "application/pdf") {
+      if (file.size > MAX_PDF_BYTES) { resolve(null); return; }
+      const reader = new FileReader();
+      reader.onload = (e) => resolve({ name: file.name, type: file.type, data: e.target.result });
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(file);
+      return;
+    }
+    // その他は拒否
+    resolve(null);
+  });
+}
+
+
+
+/* ═══ ペイロードサイズチェック ═══ */
+const MAX_PAYLOAD_BYTES = 900 * 1024; // Upstash 1MB制限に余裕を持たせる
+const checkPayloadSize = (form) => {
+  const size = new Blob([JSON.stringify(form)]).size;
+  return size <= MAX_PAYLOAD_BYTES;
+};
 
 /* ═══ API helper ═══ */
 const api = async (path, method="GET", body, token) => {
@@ -105,16 +164,19 @@ export default function ExpenseApp({ session, onLogout }) {
   }, []);
 
   const handleFiles = useCallback((files) => {
-    Promise.all(Array.from(files).map(f => new Promise(res => {
-      const r = new FileReader();
-      r.onload = e => res({ name: f.name, type: f.type, data: e.target.result });
-      r.readAsDataURL(f);
-    }))).then(arr => setForm(p => ({ ...p, files: [...p.files, ...arr] })));
+    Promise.all(Array.from(files).map(f => processFile(f)))
+      .then(arr => {
+        const valid = arr.filter(Boolean);
+        const tooBig = arr.length - valid.length;
+        if (tooBig > 0) alert(`${tooBig}件のファイルが大きすぎるため追加できませんでした（PDFは2MBまで）`);
+        setForm(p => ({ ...p, files: [...p.files, ...valid] }));
+      });
   }, []);
 
   /* ── API operations ── */
   const saveExpense = async () => {
     if (!form.date || !form.description || !form.amount) return;
+    if (!checkPayloadSize(form)) { alert("添付ファイルの合計サイズが大きすぎます。写真を減らすか、PDFを小さくしてください。"); return; }
     setSaving(true);
     try {
       const item = await api("/api/expenses", "POST", {
@@ -132,6 +194,7 @@ export default function ExpenseApp({ session, onLogout }) {
 
   const updateExpense = async () => {
     if (!form.date || !form.description || !form.amount) return;
+    if (!checkPayloadSize(form)) { alert("添付ファイルの合計サイズが大きすぎます。写真を減らすか、PDFを小さくしてください。"); return; }
     setSaving(true);
     try {
       const updated = await api(
