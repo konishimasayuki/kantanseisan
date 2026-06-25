@@ -593,6 +593,17 @@ function SettleForm({ form, onChange, onSave, onCancel, saving, unsettled }) {
 function DetailView({ expense, onBack, onDelete, onEdit }) {
   const cat = getCat(expense.category);
   const [confirm, setConfirm] = useState(false);
+  const [preview, setPreview] = useState(null);
+
+  const openFile = (f) => {
+    if (f.type.startsWith("image/")) {
+      setPreview(f);
+    } else {
+      const w = window.open();
+      if (w) w.document.write(`<iframe src="${f.data}" style="border:0;width:100vw;height:100vh"></iframe>`);
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -622,11 +633,22 @@ function DetailView({ expense, onBack, onDelete, onEdit }) {
           <div style={{fontSize:12,fontWeight:700,color:"#64748B",marginBottom:8}}>添付ファイル</div>
           <div style={S.fileRow}>
             {expense.files.map((f,i) => (
-              <div key={i}>
-                {f.type.startsWith("image/") ? <img src={f.data} alt={f.name} style={S.thumbLg} /> : <div style={S.pdfThumbLg}>PDF<br/><span style={{fontSize:9}}>{f.name}</span></div>}
+              <div key={i} onClick={() => openFile(f)} style={{cursor:"pointer"}}>
+                {f.type.startsWith("image/")
+                  ? <div style={{position:"relative"}}>
+                      <img src={f.data} alt={f.name} style={S.thumbLg} />
+                      <div style={S.zoomBadge}>⤢</div>
+                    </div>
+                  : <div style={S.pdfThumbLg}>PDF<br/><span style={{fontSize:9}}>{f.name}</span></div>}
               </div>
             ))}
           </div>
+        </div>
+      )}
+      {preview && (
+        <div style={S.previewOverlay} onClick={() => setPreview(null)}>
+          <button style={S.previewClose} onClick={() => setPreview(null)}>✕</button>
+          <img src={preview.data} alt={preview.name} style={S.previewImg} onClick={e => e.stopPropagation()} />
         </div>
       )}
       {confirm && (
@@ -756,6 +778,10 @@ const S = {
   fileRow: { display:"flex", flexWrap:"wrap", gap:8, marginTop:10 },
   thumb: { width:56, height:56, objectFit:"cover", borderRadius:6, display:"block" },
   thumbLg: { width:100, height:100, objectFit:"cover", borderRadius:8, display:"block" },
+  zoomBadge: { position:"absolute", bottom:4, right:4, background:"#000000aa", color:"#fff", borderRadius:4, fontSize:12, width:20, height:20, display:"flex", alignItems:"center", justifyContent:"center", pointerEvents:"none" },
+  previewOverlay: { position:"fixed", inset:0, background:"#000000ee", display:"flex", alignItems:"center", justifyContent:"center", zIndex:500, padding:16 },
+  previewClose: { position:"fixed", top:16, right:16, background:"#ffffff22", border:"none", color:"#fff", fontSize:22, width:44, height:44, borderRadius:"50%", cursor:"pointer", zIndex:510, display:"flex", alignItems:"center", justifyContent:"center" },
+  previewImg: { maxWidth:"100%", maxHeight:"100%", objectFit:"contain", borderRadius:8 },
   pdfThumb: { width:56, height:56, background:"#FEE2E2", color:"#EF4444", borderRadius:6, display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700 },
   pdfThumbLg: { width:100, height:100, background:"#FEE2E2", color:"#EF4444", borderRadius:8, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", fontSize:13, fontWeight:700, textAlign:"center", padding:6 },
   fileX: { position:"absolute", top:-6, right:-6, background:"#EF4444", color:"#fff", border:"none", borderRadius:"50%", width:18, height:18, fontSize:9, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center", padding:0 },
