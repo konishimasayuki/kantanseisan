@@ -144,7 +144,13 @@ export default function ExpenseApp({ session, onLogout }) {
   const totalSettled   = settlements.reduce((s,r) => s + (r.amount||0), 0);
   const totalUnsettled = totalExpenses - totalSettled;
 
-  const monthExpenses  = expenses.filter(e => !filterMonth || e.date?.startsWith(filterMonth));
+  const monthExpenses  = expenses
+    .filter(e => !filterMonth || e.date?.startsWith(filterMonth))
+    .sort((a, b) => {
+      const d = (b.date || "").localeCompare(a.date || "");
+      if (d !== 0) return d;
+      return (b.createdAt || "").localeCompare(a.createdAt || "");
+    });
   const monthTotal     = monthExpenses.reduce((s,e) => s + (e.amount||0), 0);
   const monthSettled   = settlements.filter(r => r.date?.startsWith(filterMonth)).reduce((s,r) => s + (r.amount||0), 0);
 
@@ -339,7 +345,7 @@ export default function ExpenseApp({ session, onLogout }) {
         {view==="list" && (
           <ListView
             expenses={monthExpenses}
-            settlements={settlements.filter(r=>r.date?.startsWith(filterMonth))}
+            settlements={settlements.filter(r=>r.date?.startsWith(filterMonth)).sort((a,b)=>(b.date||"").localeCompare(a.date||""))}
             filterMonth={filterMonth}
             setFilterMonth={setFilterMonth}
             monthTotal={monthTotal}
