@@ -201,27 +201,31 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
       e.from && e.to ? `${e.from} → ${e.to}` : "-",
       e.distance ? `${e.distance}km` : "-",
       fmt(e.amount),
+      `¥${e.fuelPrice || 165}/L・${e.fuelEff || 15}km/L`,
     ]);
     drawTable(
-      ["日付", "内容", "区間", "距離", "金額"],
+      ["日付", "内容", "区間", "距離", "金額", "単価・燃費"],
       fuelRows,
-      [55, 115, 115, 45, 70],
+      [50, 95, 95, 40, 60, 75],
       { rightCols: [3, 4], boldCols: [4], boldColor: C.orange }
     );
   }
 
-  // ── 経費明細全件 ──
-  drawSection("経費明細（全件）");
-  const allRows = monthExpenses.map((e) => [
-    fmtDate(e.date),
-    getCatLabel(e.category),
-    e.description + (e.memo ? ` (${e.memo})` : ""),
-    fmt(e.amount),
-  ]);
+  // ── 経費明細（ガソリン代を除く） ──
+  drawSection("経費明細");
+  const allRows = monthExpenses
+    .filter((e) => e.category !== "fuel")
+    .map((e) => [
+      fmtDate(e.date),
+      getCatLabel(e.category),
+      e.description,
+      fmt(e.amount),
+      e.memo || "-",
+    ]);
   drawTable(
-    ["日付", "カテゴリ", "内容", "金額"],
+    ["日付", "カテゴリ", "内容", "金額", "備考"],
     allRows,
-    [55, 70, 165, 70],
+    [50, 60, 110, 60, 95],
     { rightCols: [3], boldCols: [3], boldColor: C.orange }
   );
 
