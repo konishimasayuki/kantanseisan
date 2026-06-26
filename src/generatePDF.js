@@ -133,10 +133,13 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
     // 行
     rows.forEach((row, ri) => {
       if (!options.noEnsure) ensurePage(ROW_H + 4);
+      const isLast = ri === rows.length - 1;
+      const isEmph = options.emphasizeLastRow && isLast;
       const isEven = ri % 2 === 1;
-      const rowBg = options.altColor
+      let rowBg = options.altColor
         ? (isEven ? options.altColor : C.white)
         : (isEven ? C.orangeLight : C.white);
+      if (isEmph) rowBg = C.orangeBorder; // 合計行は濃いめ背景
 
       page.drawRectangle({ x: X0, y: y - ROW_H, width: tableW, height: ROW_H, color: rowBg });
       // 下線
@@ -146,8 +149,11 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
       row.forEach((cell, ci) => {
         const isRight = options.rightCols?.includes(ci);
         const isBold  = options.boldCols?.includes(ci);
-        const textColor = options.boldColor && isBold ? options.boldColor : (ri === rows.length - 1 && options.lastRowColor ? options.lastRowColor : C.dark);
-        const textSize = 8.5;
+        let textColor = C.dark;
+        if (isEmph) textColor = rgb(0.78, 0.29, 0.03);          // 合計行は濃いオレンジ
+        else if (options.boldColor && isBold) textColor = options.boldColor;
+        else if (isLast && options.lastRowColor) textColor = options.lastRowColor;
+        const textSize = isEmph ? 9 : 8.5;                       // 合計は少し大きく
         const text = String(cell ?? "");
 
         // 右揃え
@@ -156,7 +162,11 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
           ? rx + colWidths[ci] - textW - 5
           : rx + 5;
 
+        // 合計行は擬似太字（わずかにずらして二重描画）
         page.drawText(text, { x: tx, y: y - ROW_H + 5, size: textSize, font, color: textColor });
+        if (isEmph) {
+          page.drawText(text, { x: tx + 0.3, y: y - ROW_H + 5, size: textSize, font, color: textColor });
+        }
         rx += colWidths[ci];
       });
       y -= ROW_H;
@@ -189,12 +199,14 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
       `${monthExpenses.filter((e) => e.category === cat.id).length} 件`,
       fmt(catTotals[cat.id]),
     ]);
-  catRowsAll.push(["合計", `${monthExpenses.length} 件`, fmt(monthTotal)]);
 
-  // 左右に振り分け（左に多め）
+  // 合計行を分離
+  const totalRow = ["合計", `${monthExpenses.length} 件`, fmt(monthTotal)];
+
+  // 合計以外を左右に振り分け（左に多め）、合計は右末尾に必ず追加
   const half = Math.ceil(catRowsAll.length / 2);
   const leftRows  = catRowsAll.slice(0, half);
-  const rightRows = catRowsAll.slice(half);
+  const rightRows = [...catRowsAll.slice(half), totalRow];
   const catCols = [100, 50, 75];
   const catTableW = catCols.reduce((s, w) => s + w, 0);
   const gap2 = 20;
@@ -204,13 +216,13 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
 
   const leftEnd = drawTable(
     ["カテゴリ", "件数", "金額"], leftRows, catCols,
-    { rightCols: [1, 2], lastRowColor: C.orange, noAdvanceY: true, noEnsure: true }
+    { rightCols: [1, 2], noAdvanceY: true, noEnsure: true }
   );
   let rightEnd = y;
   if (rightRows.length > 0) {
     rightEnd = drawTable(
       ["カテゴリ", "件数", "金額"], rightRows, catCols,
-      { startX: MARGIN + catTableW + gap2, rightCols: [1, 2], noAdvanceY: true, noEnsure: true }
+      { startX: MARGIN + catTableW + gap2, rightCols: [1, 2], emphasizeLastRow: true, noAdvanceY: true, noEnsure: true }
     );
   }
   // 低い方に合わせてY送り
