@@ -206,7 +206,7 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
     drawTable(
       ["日付", "内容", "区間", "距離", "金額", "単価・燃費"],
       fuelRows,
-      [50, 95, 95, 40, 60, 75],
+      [50, 95, 95, 40, 60, 113],
       { rightCols: [3, 4], boldCols: [4], boldColor: C.orange }
     );
   }
@@ -225,9 +225,69 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
   drawTable(
     ["日付", "カテゴリ", "内容", "金額", "備考"],
     allRows,
-    [50, 60, 110, 60, 95],
+    [50, 60, 165, 60, 95],
     { rightCols: [3], boldCols: [3], boldColor: C.orange }
   );
+
+  // ── 添付写真サムネイル（経費明細の下） ──
+  const photos = [];
+  monthExpenses
+    .filter((e) => e.category !== "fuel")
+    .forEach((e) => {
+      (e.files || []).forEach((f) => {
+        if (f.type?.startsWith("image/")) {
+          photos.push({ data: f.data, date: e.date, desc: e.description });
+        }
+      });
+    });
+
+  if (photos.length > 0) {
+    drawSection("添付写真");
+    const thumbW = 80;
+    const thumbH = 80;
+    const gap = 10;
+    const perRow = Math.floor((CONTENT_W + gap) / (thumbW + gap));
+    let col = 0;
+    let rowMaxBottom = y;
+
+    for (const photo of photos) {
+      // 改ページ判定（サムネイル＋ラベル分）
+      if (y - (thumbH + 14) < MARGIN + 20) {
+        drawFooter(page, font, pdfDoc.getPageCount());
+        page = pdfDoc.addPage([PAGE_W, PAGE_H]);
+        y = PAGE_H - MARGIN;
+        col = 0;
+      }
+      const x = MARGIN + col * (thumbW + gap);
+      try {
+        let img;
+        if (photo.data.startsWith("data:image/png")) {
+          img = await pdfDoc.embedPng(photo.data);
+        } else {
+          img = await pdfDoc.embedJpg(photo.data);
+        }
+        // アスペクト比維持してthumb枠に収める
+        const scale = Math.min(thumbW / img.width, thumbH / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        // 枠
+        page.drawRectangle({ x, y: y - thumbH, width: thumbW, height: thumbH, borderColor: C.border, borderWidth: 0.5, color: C.lightGray });
+        // 画像（中央寄せ）
+        page.drawImage(img, { x: x + (thumbW - w) / 2, y: y - thumbH + (thumbH - h) / 2, width: w, height: h });
+        // 日付ラベル
+        page.drawText(fmtDate(photo.date), { x, y: y - thumbH - 9, size: 6.5, font, color: C.gray });
+      } catch {
+        // 埋め込み失敗時はスキップ
+      }
+      col++;
+      if (col >= perRow) {
+        col = 0;
+        y -= thumbH + 18;
+      }
+    }
+    if (col !== 0) y -= thumbH + 18;
+    y -= 4;
+  }
 
   // ── 精算記録 ──
   if (monthSetts.length > 0) {
