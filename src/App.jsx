@@ -3,15 +3,22 @@ import LoginPage from "./components/LoginPage.jsx";
 import ExpenseApp from "./components/ExpenseApp.jsx";
 
 export default function App() {
-  const [session, setSession] = useState(null); // { userId, token }
+  const [session, setSession] = useState(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem("ks_session");
+    // localStorage（永続）→ なければ sessionStorage（旧データ移行）の順で確認
+    const saved = localStorage.getItem("ks_session") || sessionStorage.getItem("ks_session");
     if (saved) {
       try {
         setSession(JSON.parse(saved));
+        // sessionStorageに残っていたら localStorage に移す
+        if (!localStorage.getItem("ks_session")) {
+          localStorage.setItem("ks_session", saved);
+          sessionStorage.removeItem("ks_session");
+        }
       } catch {
+        localStorage.removeItem("ks_session");
         sessionStorage.removeItem("ks_session");
       }
     }
@@ -19,11 +26,12 @@ export default function App() {
   }, []);
 
   const handleLogin = (sess) => {
-    sessionStorage.setItem("ks_session", JSON.stringify(sess));
+    localStorage.setItem("ks_session", JSON.stringify(sess));
     setSession(sess);
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("ks_session");
     sessionStorage.removeItem("ks_session");
     setSession(null);
   };
