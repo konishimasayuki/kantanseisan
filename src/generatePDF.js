@@ -110,12 +110,14 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
     const HEAD_H = 20;
     const tableW = colWidths.reduce((s, w) => s + w, 0);
     const totalRows = rows.length;
+    const X0 = options.startX ?? MARGIN;
+    const startY = y;
 
-    ensurePage(HEAD_H + ROW_H * Math.min(3, totalRows) + 10);
+    if (!options.noEnsure) ensurePage(HEAD_H + ROW_H * Math.min(3, totalRows) + 10);
 
     // ヘッダー
-    page.drawRectangle({ x: MARGIN, y: y - HEAD_H, width: tableW, height: HEAD_H, color: options.headColor || C.orange });
-    let hx = MARGIN;
+    page.drawRectangle({ x: X0, y: y - HEAD_H, width: tableW, height: HEAD_H, color: options.headColor || C.orange });
+    let hx = X0;
     headers.forEach((h, i) => {
       page.drawText(h, {
         x: hx + 5,
@@ -130,17 +132,17 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
 
     // 行
     rows.forEach((row, ri) => {
-      ensurePage(ROW_H + 4);
+      if (!options.noEnsure) ensurePage(ROW_H + 4);
       const isEven = ri % 2 === 1;
       const rowBg = options.altColor
         ? (isEven ? options.altColor : C.white)
         : (isEven ? C.orangeLight : C.white);
 
-      page.drawRectangle({ x: MARGIN, y: y - ROW_H, width: tableW, height: ROW_H, color: rowBg });
+      page.drawRectangle({ x: X0, y: y - ROW_H, width: tableW, height: ROW_H, color: rowBg });
       // 下線
-      page.drawLine({ start: { x: MARGIN, y: y - ROW_H }, end: { x: MARGIN + tableW, y: y - ROW_H }, thickness: 0.3, color: C.border });
+      page.drawLine({ start: { x: X0, y: y - ROW_H }, end: { x: X0 + tableW, y: y - ROW_H }, thickness: 0.3, color: C.border });
 
-      let rx = MARGIN;
+      let rx = X0;
       row.forEach((cell, ci) => {
         const isRight = options.rightCols?.includes(ci);
         const isBold  = options.boldCols?.includes(ci);
@@ -160,8 +162,11 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
       y -= ROW_H;
     });
     // 外枠
-    page.drawRectangle({ x: MARGIN, y, width: tableW, height: HEAD_H + ROW_H * rows.length, borderColor: C.border, borderWidth: 0.5 });
-    y -= 12;
+    page.drawRectangle({ x: X0, y, width: tableW, height: HEAD_H + ROW_H * rows.length, borderColor: C.border, borderWidth: 0.5 });
+    const endY = y;
+    if (options.noAdvanceY) y = startY; // Y位置を戻す（横並び用）
+    else y -= 12;
+    return endY;
   };
 
   // ── セクションタイトル描画 ──
@@ -173,24 +178,43 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
     y -= 26;
   };
 
-  // ── カテゴリ別集計 ──
+  // ── カテゴリ別集計（横2列） ──
   drawSection("カテゴリ別集計");
   const catTotals = {};
   monthExpenses.forEach((e) => { catTotals[e.category] = (catTotals[e.category] || 0) + e.amount; });
-  const catRows = CATEGORIES
+  const catRowsAll = CATEGORIES
     .filter((cat) => catTotals[cat.id])
     .map((cat) => [
       cat.label,
       `${monthExpenses.filter((e) => e.category === cat.id).length} 件`,
       fmt(catTotals[cat.id]),
     ]);
-  catRows.push(["合計", `${monthExpenses.length} 件`, fmt(monthTotal)]);
-  drawTable(
-    ["カテゴリ", "件数", "金額"],
-    catRows,
-    [100, 60, 80],
-    { rightCols: [1, 2], lastRowColor: C.orange }
+  catRowsAll.push(["合計", `${monthExpenses.length} 件`, fmt(monthTotal)]);
+
+  // 左右に振り分け（左に多め）
+  const half = Math.ceil(catRowsAll.length / 2);
+  const leftRows  = catRowsAll.slice(0, half);
+  const rightRows = catRowsAll.slice(half);
+  const catCols = [100, 50, 75];
+  const catTableW = catCols.reduce((s, w) => s + w, 0);
+  const gap2 = 20;
+
+  // 改ページ確保（最大行数ぶん）
+  ensurePage(20 + 18 * Math.max(leftRows.length, rightRows.length) + 10);
+
+  const leftEnd = drawTable(
+    ["カテゴリ", "件数", "金額"], leftRows, catCols,
+    { rightCols: [1, 2], lastRowColor: C.orange, noAdvanceY: true, noEnsure: true }
   );
+  let rightEnd = y;
+  if (rightRows.length > 0) {
+    rightEnd = drawTable(
+      ["カテゴリ", "件数", "金額"], rightRows, catCols,
+      { startX: MARGIN + catTableW + gap2, rightCols: [1, 2], noAdvanceY: true, noEnsure: true }
+    );
+  }
+  // 低い方に合わせてY送り
+  y = Math.min(leftEnd, rightEnd) - 12;
 
   // ── ガソリン代明細 ──
   if (fuelItems.length > 0) {
@@ -243,8 +267,8 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
 
   if (photos.length > 0) {
     drawSection("添付写真");
-    const thumbW = 80;
-    const thumbH = 80;
+    const thumbW = 72;
+    const thumbH = 72;
     const gap = 10;
     const perRow = Math.floor((CONTENT_W + gap) / (thumbW + gap));
     let col = 0;
