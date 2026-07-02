@@ -75,14 +75,22 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
   };
 
   // ── ヘッダー背景 ──
-  page.drawRectangle({ x: 0, y: PAGE_H - 60, width: PAGE_W, height: 60, color: C.orange });
+  page.drawRectangle({ x: 0, y: PAGE_H - 64, width: PAGE_W, height: 64, color: C.orange });
 
   // タイトル
-  page.drawText("経費精算書", { x: MARGIN, y: PAGE_H - 30, size: 20, font, color: C.white });
-  page.drawText(`${monthLabel}  ／  ${displayName || ""}`, { x: MARGIN, y: PAGE_H - 50, size: 10, font, color: C.white });
-  page.drawText(`出力日: ${todayStr()}`, { x: PAGE_W - MARGIN - 80, y: PAGE_H - 50, size: 9, font, color: C.white });
+  page.drawText("経費精算書", { x: MARGIN, y: PAGE_H - 28, size: 20, font, color: C.white });
+  page.drawText(`${monthLabel}  ／  ${displayName || ""}`, { x: MARGIN, y: PAGE_H - 48, size: 10, font, color: C.white });
 
-  y = PAGE_H - 75;
+  // 右側：出力日＋振込先（右揃え）
+  const rightText = (text, yy, size) => {
+    const w = font.widthOfTextAtSize(text, size);
+    page.drawText(text, { x: PAGE_W - MARGIN - w, y: yy, size, font, color: C.white });
+  };
+  rightText(`出力日: ${todayStr()}`, PAGE_H - 22, 9);
+  rightText("【振込先】三菱UFJ銀行 久留米支店", PAGE_H - 40, 9);
+  rightText("普通 0016202 コニシマサユキ", PAGE_H - 54, 9);
+
+  y = PAGE_H - 78;
 
   // ── サマリーカード ──
   const cardW = (CONTENT_W - 16) / 3;
