@@ -44,17 +44,50 @@ async function loadFont(pdfDoc) {
   return pdfDoc.embedFont(buf);
 }
 
-export async function generatePDF({ monthExpenses, monthTotal, monthSettled, filterMonth, settlements, displayName }) {
+export async function generatePDF({ monthExpenses, monthTotal, monthSettled, filterMonth, settlements, allExpenses, displayName }) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
 
   const font     = await loadFont(pdfDoc);
   const fontBold = font; // OTFにboldが別ファイルないのでRegularで代用
 
-  const monthUnsettled = monthTotal - monthSettled;
   const monthLabel = filterMonth ? filterMonth.replace("-", "年") + "月" : "全期間";
   const monthSetts = settlements.filter((r) => r.date?.startsWith(filterMonth));
   const fuelItems  = monthExpenses.filter((e) => e.category === "fuel");
+
+  // ── 累計ベースの残高計算 ──
+  // その月末まで（filterMonthが空＝全期間なら全部）を対象に、
+  // 立替累計・精算累計から未精算残と当月実質精算を算出
+  const exps = allExpenses || monthExpenses;
+  let cumExpenseThruMonth = 0;   // 当月末までの立替累計
+  let cumSettledThruMonth = 0;   // 当月末までの精算累計
+  let cumExpenseBeforeMonth = 0; // 前月末までの立替累計
+  let cumSettledBeforeMonth = 0; // 前月末までの精算累計
+
+  if (filterMonth) {
+    exps.forEach((e) => {
+      const m = (e.date || "").slice(0, 7);
+      if (m && m <= filterMonth) cumExpenseThruMonth += (e.amount || 0);
+      if (m && m <  filterMonth) cumExpenseBeforeMonth += (e.amount || 0);
+    });
+    settlements.forEach((r) => {
+      const m = (r.date || "").slice(0, 7);
+      if (m && m <= filterMonth) cumSettledThruMonth += (r.amount || 0);
+      if (m && m <  filterMonth) cumSettledBeforeMonth += (r.amount || 0);
+    });
+  } else {
+    // 全期間：単純累計
+    cumExpenseThruMonth = exps.reduce((s, e) => s + (e.amount || 0), 0);
+    cumSettledThruMonth = settlements.reduce((s, r) => s + (r.amount || 0), 0);
+  }
+
+  // 前月末時点の未精算（繰越）
+  const carryOver = cumExpenseBeforeMonth - cumSettledBeforeMonth;
+  // 未精算残（当月末時点の累計）
+  const monthUnsettled = cumExpenseThruMonth - cumSettledThruMonth;
+  // 当月に実質充当された精算額（繰越＋当月経費のうち精算された分）
+  //   = 当月末精算累計 − 前月末精算累計 … だが繰越も含めた「当月動いた精算」を表示
+  const settledThisPeriod = cumSettledThruMonth - cumSettledBeforeMonth;
 
   // ── ページ管理 ──
   const PAGE_W = 595;   // A4
@@ -95,9 +128,9 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
   // ── サマリーカード ──
   const cardW = (CONTENT_W - 16) / 3;
   const cards = [
-    { label: "経費合計", value: fmt(monthTotal),     color: C.orange, bg: C.orangeLight },
-    { label: "精算済み", value: fmt(monthSettled),   color: C.green,  bg: C.greenLight  },
-    { label: "未精算残", value: fmt(monthUnsettled), color: C.red,    bg: rgb(1, 0.941, 0.941) },
+    { label: "当月経費", value: fmt(monthTotal),         color: C.orange, bg: C.orangeLight },
+    { label: "精算（当月）", value: fmt(settledThisPeriod), color: C.green,  bg: C.greenLight  },
+    { label: "未精算残（累計）", value: fmt(monthUnsettled), color: C.red,   bg: rgb(1, 0.941, 0.941) },
   ];
   cards.forEach((card, i) => {
     const x = MARGIN + i * (cardW + 8);
@@ -106,11 +139,19 @@ export async function generatePDF({ monthExpenses, monthTotal, monthSettled, fil
     // 左のカラーバー
     page.drawRectangle({ x, y: y - 44, width: 3, height: 44, color: card.color });
     // ラベル
-    page.drawText(card.label, { x: x + 8, y: y - 16, size: 9, font, color: card.color });
+    page.drawText(card.label, { x: x + 8, y: y - 16, size: 8.5, font, color: card.color });
     // 金額
     page.drawText(card.value, { x: x + 8, y: y - 34, size: 14, font, color: card.color });
   });
-  y -= 56;
+  y -= 48;
+
+  // 繰越がある場合は注記（前月末の未精算を当月に繰り越している）
+  if (filterMonth && carryOver !== 0) {
+    const note = `※ 前月末からの繰越（未精算）: ${fmt(carryOver)} を含む累計残高です`;
+    page.drawText(note, { x: MARGIN, y: y, size: 8, font, color: C.gray });
+    y -= 12;
+  }
+  y -= 8;
 
   // ── テーブル描画ヘルパー ──
   const drawTable = (headers, rows, colWidths, options = {}) => {
