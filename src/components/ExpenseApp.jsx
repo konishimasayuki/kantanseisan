@@ -261,6 +261,7 @@ export default function ExpenseApp({ session, onLogout }) {
       monthSettled,
       filterMonth,
       settlements,
+      allExpenses: expenses,
       displayName: session.displayName || session.userId,
     });
   };
